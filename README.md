@@ -7,3 +7,5 @@ Main reasons/motivation :
 * desire to contribute in some OS project
 * experiment with new features
 * maybe contribute some changes to original JPF/SPF.
+
+[![Join the chat at https://gitter.im/grzesuav/gjpf-symbc](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/grzesuav/gjpf-symbc?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
