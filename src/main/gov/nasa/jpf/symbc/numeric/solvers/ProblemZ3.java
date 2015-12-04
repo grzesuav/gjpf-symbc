@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2014, United States Government, as represented by the
+ * Administrator of the National Aeronautics and Space Administration.
+ * All rights reserved.
+ *
+ * Symbolic Pathfinder (jpf-symbc) is licensed under the Apache License, 
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ * 
+ *        http://www.apache.org/licenses/LICENSE-2.0. 
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
+
 //
 //Copyright (C) 2006 United States Government as represented by the
 //Administrator of the National Aeronautics and Space Administration
@@ -22,6 +40,8 @@ package gov.nasa.jpf.symbc.numeric.solvers;
 //TODO: problem: we do not distinguish between ints and reals?
 // still needs a lot of work: do not use!
 
+
+import gov.nasa.jpf.vm.Verify;
 
 import java.util.HashMap;
 import java.util.List;
@@ -62,8 +82,12 @@ public class ProblemZ3 extends ProblemGeneral {
 	// TODO: to add ranges
 	public Object makeIntVar(String name, int min, int max) {
 		try{
-			
-			return ctx.MkIntConst(name);
+			//return ctx.MkIntConst(name);
+			IntExpr intConst = ctx.MkIntConst(name);
+            solver.Assert(ctx.MkGe(intConst, ctx.MkInt(min)));
+            solver.Assert(ctx.MkLe(intConst, ctx.MkInt(max)));
+            return intConst;
+
 		} catch (Exception e) {
 			e.printStackTrace();
 			throw new RuntimeException("## Error Z3: Exception caught in Z3 JNI: \n" + e);
@@ -573,6 +597,37 @@ public class ProblemZ3 extends ProblemGeneral {
 			throw new RuntimeException("## Error Z3: Exception caught in Z3 JNI: \n" + e);
 		}
 	}
+	
+	public Object rem(Object exp, int value) {// added by corina
+        try{
+                
+                return  ctx.MkRem((IntExpr) exp, ctx.MkInt(value));
+        } catch (Exception e) {
+                e.printStackTrace();
+                throw new RuntimeException("## Error Z3: Exception caught in Z3 JNI: \n" + e);
+        }
+}
+public Object rem(int value, Object exp) {// added by corina
+        try{
+                
+                return  ctx.MkRem(ctx.MkInt(value), (IntExpr) exp);
+        } catch (Exception e) {
+                e.printStackTrace();
+                throw new RuntimeException("## Error Z3: Exception caught in Z3 JNI: \n" + e);
+        }
+}
+public Object rem(Object exp1, Object exp2) {// added by corina
+        try{
+                if(exp2 instanceof Integer)
+                        return  ctx.MkRem((IntExpr)exp1,ctx.MkInt((Integer)exp2));
+                return  ctx.MkRem((IntExpr) exp1, (IntExpr) exp2);
+        } catch (Exception e) {
+                e.printStackTrace();
+                throw new RuntimeException("## Error Z3: Exception caught in Z3 JNI: \n" + e);
+        }
+}
+
+
 //	public Object div(double value, Object exp) {
 //		try{
 //			return  vc.divideExpr(vc.ratExpr(Double.toString(value), base), (Expr)exp);
@@ -853,6 +908,7 @@ public class ProblemZ3 extends ProblemGeneral {
 		throw new RuntimeException("## Error Z3 \n");
 	}
 
+	
 
 	@Override
 	public Object shiftL(int value, Object exp) {

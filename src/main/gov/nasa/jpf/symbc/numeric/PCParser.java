@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2014, United States Government, as represented by the
+ * Administrator of the National Aeronautics and Space Administration.
+ * All rights reserved.
+ *
+ * Symbolic Pathfinder (jpf-symbc) is licensed under the Apache License, 
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ * 
+ *        http://www.apache.org/licenses/LICENSE-2.0. 
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
+
 //
 //Copyright (C) 2005 United States Government as represented by the
 //Administrator of the National Aeronautics and Space Administration
@@ -19,21 +37,14 @@
 
 package gov.nasa.jpf.symbc.numeric;
 
-import gov.nasa.jpf.symbc.SymbolicInstructionFactory;
-import gov.nasa.jpf.symbc.numeric.solvers.ProblemCoral;
-import gov.nasa.jpf.symbc.numeric.solvers.ProblemGeneral;
-
-
-
-
-
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.Map.Entry;
+
+import gov.nasa.jpf.symbc.numeric.solvers.ProblemCoral;
+import gov.nasa.jpf.symbc.numeric.solvers.ProblemGeneral;
+import gov.nasa.jpf.symbc.numeric.solvers.ProblemZ3;
 
 
 // parses PCs
@@ -46,7 +57,7 @@ public class PCParser {
 	  static int tempVars = 0; //Used to construct "or" clauses
 
 	  //	 Converts IntegerExpression's into DP's IntExp's
-	  static Object getExpression(IntegerExpression eRef) {
+	  static Object getExpression(final IntegerExpression eRef) {
 			assert eRef != null;
 			assert !(eRef instanceof IntegerConstant);
 			
@@ -70,7 +81,7 @@ public class PCParser {
 				e_leftRef = ((BinaryLinearIntegerExpression)eRef).left;
 				e_rightRef = ((BinaryLinearIntegerExpression)eRef).right;
 			} else { // bin non lin expr
-				if(pb instanceof ProblemCoral) {
+				if(pb instanceof ProblemCoral || pb instanceof ProblemZ3) {
 					opRef = ((BinaryNonLinearIntegerExpression)eRef).op;
 					e_leftRef = ((BinaryNonLinearIntegerExpression)eRef).left;
 					e_rightRef = ((BinaryNonLinearIntegerExpression)eRef).right;
@@ -105,7 +116,7 @@ public class PCParser {
 				else if (e_rightRef instanceof IntegerConstant)
 					return pb.mult(((IntegerConstant)e_rightRef).value,getExpression(e_leftRef));
 				else {
-					 if(pb instanceof ProblemCoral)
+					 if(pb instanceof ProblemCoral || pb instanceof ProblemZ3)
 						return pb.mult(getExpression(e_leftRef),getExpression(e_rightRef));
 					 else
 						throw new RuntimeException("## Error: Binary Non Linear Operation");
@@ -118,7 +129,7 @@ public class PCParser {
 				else if (e_rightRef instanceof IntegerConstant)
 					return pb.div(getExpression(e_leftRef),((IntegerConstant)e_rightRef).value);
 				else {
-					if(pb instanceof ProblemCoral)
+					if(pb instanceof ProblemCoral || pb instanceof ProblemZ3)
 						return pb.div(getExpression(e_leftRef),getExpression(e_rightRef));
 					 else
 						throw new RuntimeException("## Error: Binary Non Linear Operation");
@@ -177,6 +188,19 @@ public class PCParser {
 					return pb.shiftL(getExpression(e_leftRef),((IntegerConstant)e_rightRef).value);
 				else
 					return pb.shiftL(getExpression(e_leftRef),getExpression(e_rightRef));
+			case REM:
+                if (e_leftRef instanceof IntegerConstant && e_rightRef instanceof IntegerConstant)
+                    throw new RuntimeException("## Error: this is not a symbolic expression"); //
+            else if (e_leftRef instanceof IntegerConstant) // TODO: this might not be linear
+                    return pb.rem(((IntegerConstant)e_leftRef).value,getExpression(e_rightRef));
+            else if (e_rightRef instanceof IntegerConstant)
+                    return pb.rem(getExpression(e_leftRef),((IntegerConstant)e_rightRef).value);
+            else {
+                    if(pb instanceof ProblemCoral || pb instanceof ProblemZ3)
+                            return pb.rem(getExpression(e_leftRef),getExpression(e_rightRef));
+                     else
+                            throw new RuntimeException("## Error: Binary Non Linear Operation");
+            }      
 			default:
 				throw new RuntimeException("## Error: Binary Non Linear Operation");
 			}
@@ -186,7 +210,7 @@ public class PCParser {
 
 
 	// Converts RealExpression's into DP RealExp's
-	static Object getExpression(RealExpression eRef) {
+	static Object getExpression(final RealExpression eRef) {
 		assert eRef != null;
 		assert !(eRef instanceof RealConstant);
 
@@ -270,6 +294,7 @@ public class PCParser {
 			e_arg1Ref = ((MathRealExpression)eRef).arg1;
 			e_arg2Ref = ((MathRealExpression)eRef).arg2;
 			switch(funRef){
+			case ABS: return pb.abs(getExpression(e_arg1Ref)); //Added for dReal by Nima
 			case SIN: return pb.sin(getExpression(e_arg1Ref));
 			case COS: return pb.cos(getExpression(e_arg1Ref));
 			case EXP: return pb.exp(getExpression(e_arg1Ref));
@@ -311,11 +336,11 @@ public class PCParser {
 	//}
 
 
-	static public boolean createDPMixedConstraint(MixedConstraint cRef) { // TODO
+	static public boolean createDPMixedConstraint(final MixedConstraint cRef) { // TODO
 
-		Comparator c_compRef = cRef.getComparator();
-		RealExpression c_leftRef = (RealExpression)cRef.getLeft();
-		IntegerExpression c_rightRef = (IntegerExpression)cRef.getRight();
+		final Comparator c_compRef = cRef.getComparator();
+		final RealExpression c_leftRef = (RealExpression)cRef.getLeft();
+		final IntegerExpression c_rightRef = (IntegerExpression)cRef.getRight();
 		assert (c_compRef == Comparator.EQ);
 
 		if (c_leftRef instanceof SymbolicReal && c_rightRef instanceof SymbolicInteger) {
@@ -323,7 +348,7 @@ public class PCParser {
 			pb.post(pb.mixed(getExpression(c_leftRef),getExpression(c_rightRef)));
 		}
 		else if (c_leftRef instanceof SymbolicReal) { // c_rightRef is an IntegerExpression
-			Object tmpi = pb.makeIntVar(c_rightRef + "_" + c_rightRef.hashCode(),(int)(((SymbolicReal)c_leftRef)._min), (int)(((SymbolicReal)c_leftRef)._max));
+			final Object tmpi = pb.makeIntVar(c_rightRef + "_" + c_rightRef.hashCode(),(int)(((SymbolicReal)c_leftRef)._min), (int)(((SymbolicReal)c_leftRef)._max));
 			if (c_rightRef instanceof IntegerConstant)
 				pb.post(pb.eq(((IntegerConstant)c_rightRef).value,tmpi));
 			else
@@ -333,7 +358,7 @@ public class PCParser {
 
 		}
 		else if (c_rightRef instanceof SymbolicInteger) { // c_leftRef is a RealExpression
-			Object tmpr = pb.makeRealVar(c_leftRef + "_" + c_leftRef.hashCode(), ((SymbolicInteger)c_rightRef)._min, ((SymbolicInteger)c_rightRef)._max);
+			final Object tmpr = pb.makeRealVar(c_leftRef + "_" + c_leftRef.hashCode(), ((SymbolicInteger)c_rightRef)._min, ((SymbolicInteger)c_rightRef)._max);
 			if(c_leftRef instanceof RealConstant)
 				pb.post(pb.eq(tmpr, ((RealConstant)c_leftRef).value));
 			else
@@ -347,11 +372,11 @@ public class PCParser {
 		return true;
 	}
 
-	static public boolean createDPRealConstraint(RealConstraint cRef) {
+	static public boolean createDPRealConstraint(final RealConstraint cRef) {
 
-		Comparator c_compRef = cRef.getComparator();
-		RealExpression c_leftRef = (RealExpression)cRef.getLeft();
-		RealExpression c_rightRef = (RealExpression)cRef.getRight();
+		final Comparator c_compRef = cRef.getComparator();
+		final RealExpression c_leftRef = (RealExpression)cRef.getLeft();
+		final RealExpression c_rightRef = (RealExpression)cRef.getRight();
 
 		switch(c_compRef){
 		case EQ:
@@ -455,13 +480,13 @@ public class PCParser {
 	}
 
 	//Added by Gideon, to handle CNF style constraints??? 
-	static public boolean createDPLinearOrIntegerConstraint (LogicalORLinearIntegerConstraints c) {
-		List<Object> orList = new ArrayList<Object>();
+	static public boolean createDPLinearOrIntegerConstraint (final LogicalORLinearIntegerConstraints c) {
+		final List<Object> orList = new ArrayList<Object>();
 
-		for (LinearIntegerConstraint cRef: c.getList()) {
-			Comparator c_compRef = cRef.getComparator();
-			IntegerExpression c_leftRef = (IntegerExpression)cRef.getLeft();
-			IntegerExpression c_rightRef = (IntegerExpression)cRef.getRight();
+		for (final LinearIntegerConstraint cRef: c.getList()) {
+			final Comparator c_compRef = cRef.getComparator();
+			final IntegerExpression c_leftRef = (IntegerExpression)cRef.getLeft();
+			final IntegerExpression c_rightRef = (IntegerExpression)cRef.getRight();
 			//Removed all return false: why?
 			switch(c_compRef){
 			case EQ:
@@ -470,23 +495,23 @@ public class PCParser {
 						return true;
 				}
 				else if (c_leftRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_rightRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_rightRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar, part1));
-					Object cc = pb.eq(((IntegerConstant)c_leftRef).value, tempVar);
+					final Object cc = pb.eq(((IntegerConstant)c_leftRef).value, tempVar);
 					orList.add(cc);
 				}
 				else if (c_rightRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_leftRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
+					final Object part1 = getExpression(c_leftRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
 					pb.post(pb.eq(tempVar, part1)); tempVars++;
 					orList.add(pb.eq(tempVar,((IntegerConstant)c_rightRef).value));
 				}
 				else {
-					Object part1 = getExpression(c_leftRef);
-					Object part2 = getExpression(c_rightRef);
-					Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
-					Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_leftRef);
+					final Object part2 = getExpression(c_rightRef);
+					final Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar1, part1));
 					pb.post(pb.eq(tempVar2, part2));
 					orList.add(pb.eq(tempVar1,tempVar2));
@@ -498,23 +523,23 @@ public class PCParser {
 						return true;
 				}
 				else if (c_leftRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_rightRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_rightRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar, part1));
-					Object cc = pb.neq(((IntegerConstant)c_leftRef).value, tempVar);
+					final Object cc = pb.neq(((IntegerConstant)c_leftRef).value, tempVar);
 					orList.add(cc);
 				}
 				else if (c_rightRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_leftRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
+					final Object part1 = getExpression(c_leftRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
 					pb.post(pb.eq(tempVar, part1)); tempVars++;
 					orList.add(pb.neq(tempVar,((IntegerConstant)c_rightRef).value));
 				}
 				else {
-					Object part1 = getExpression(c_leftRef);
-					Object part2 = getExpression(c_rightRef);
-					Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
-					Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_leftRef);
+					final Object part2 = getExpression(c_rightRef);
+					final Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar1, part1));
 					pb.post(pb.eq(tempVar2, part2));
 					orList.add(pb.neq(tempVar1,tempVar2));
@@ -526,23 +551,23 @@ public class PCParser {
 						return true;
 				}
 				else if (c_leftRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_rightRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_rightRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar, part1));
-					Object cc = pb.lt(((IntegerConstant)c_leftRef).value, tempVar);
+					final Object cc = pb.lt(((IntegerConstant)c_leftRef).value, tempVar);
 					orList.add(cc);
 				}
 				else if (c_rightRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_leftRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
+					final Object part1 = getExpression(c_leftRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
 					pb.post(pb.eq(tempVar, part1)); tempVars++;
 					orList.add(pb.lt(tempVar,((IntegerConstant)c_rightRef).value));
 				}
 				else {
-					Object part1 = getExpression(c_leftRef);
-					Object part2 = getExpression(c_rightRef);
-					Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
-					Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_leftRef);
+					final Object part2 = getExpression(c_rightRef);
+					final Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar1, part1));
 					pb.post(pb.eq(tempVar2, part2));
 					orList.add(pb.lt(tempVar1,tempVar2));
@@ -554,23 +579,23 @@ public class PCParser {
 						return true;
 				}
 				else if (c_leftRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_rightRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_rightRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar, part1));
-					Object cc = pb.geq(((IntegerConstant)c_leftRef).value, tempVar);
+					final Object cc = pb.geq(((IntegerConstant)c_leftRef).value, tempVar);
 					orList.add(cc);
 				}
 				else if (c_rightRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_leftRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
+					final Object part1 = getExpression(c_leftRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
 					pb.post(pb.eq(tempVar, part1)); tempVars++;
 					orList.add(pb.geq(tempVar,((IntegerConstant)c_rightRef).value));
 				}
 				else {
-					Object part1 = getExpression(c_leftRef);
-					Object part2 = getExpression(c_rightRef);
-					Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
-					Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_leftRef);
+					final Object part2 = getExpression(c_rightRef);
+					final Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar1, part1));
 					pb.post(pb.eq(tempVar2, part2));
 					orList.add(pb.geq(tempVar1,tempVar2));
@@ -582,23 +607,23 @@ public class PCParser {
 						return true;
 				}
 				else if (c_leftRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_rightRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_rightRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar, part1));
-					Object cc = pb.leq(((IntegerConstant)c_leftRef).value, tempVar);
+					final Object cc = pb.leq(((IntegerConstant)c_leftRef).value, tempVar);
 					orList.add(cc);
 				}
 				else if (c_rightRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_leftRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
+					final Object part1 = getExpression(c_leftRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
 					pb.post(pb.eq(tempVar, part1)); tempVars++;
 					orList.add(pb.leq(tempVar,((IntegerConstant)c_rightRef).value));
 				}
 				else {
-					Object part1 = getExpression(c_leftRef);
-					Object part2 = getExpression(c_rightRef);
-					Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
-					Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_leftRef);
+					final Object part2 = getExpression(c_rightRef);
+					final Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar1, part1));
 					pb.post(pb.eq(tempVar2, part2));
 					orList.add(pb.leq(tempVar1,tempVar2));
@@ -610,23 +635,23 @@ public class PCParser {
 						return true;
 				}
 				else if (c_leftRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_rightRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_rightRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar, part1));
-					Object cc = pb.gt(((IntegerConstant)c_leftRef).value, tempVar);
+					final Object cc = pb.gt(((IntegerConstant)c_leftRef).value, tempVar);
 					orList.add(cc);
 				}
 				else if (c_rightRef instanceof IntegerConstant) {
-					Object part1 = getExpression(c_leftRef);
-					Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
+					final Object part1 = getExpression(c_leftRef);
+					final Object tempVar = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt(""));
 					pb.post(pb.eq(tempVar, part1)); tempVars++;
 					orList.add(pb.gt(tempVar,((IntegerConstant)c_rightRef).value));
 				}
 				else {
-					Object part1 = getExpression(c_leftRef);
-					Object part2 = getExpression(c_rightRef);
-					Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
-					Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object part1 = getExpression(c_leftRef);
+					final Object part2 = getExpression(c_rightRef);
+					final Object tempVar1 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
+					final Object tempVar2 = pb.makeIntVar("mytemp" + tempVars, MinMax.getVarMinInt(""), MinMax.getVarMaxInt("")); tempVars++;
 					pb.post(pb.eq(tempVar1, part1));
 					pb.post(pb.eq(tempVar2, part2));
 					orList.add(pb.gt(tempVar1,tempVar2));
@@ -636,7 +661,7 @@ public class PCParser {
 		}
 		//System.out.println("[SymbolicConstraintsGeneral] orList: " + orList.toString());
 		if (orList.size() == 0) return true;
-		Object constraint_array[] = new Object[orList.size()];
+		final Object constraint_array[] = new Object[orList.size()];
 		orList.toArray(constraint_array);
 
 		pb.postLogicalOR(constraint_array);
@@ -645,12 +670,12 @@ public class PCParser {
 
 	}
 
-	static public boolean createDPLinearIntegerConstraint(LinearIntegerConstraint cRef) {
+	static public boolean createDPLinearIntegerConstraint(final LinearIntegerConstraint cRef) {
 
-		Comparator c_compRef = cRef.getComparator();
+		final Comparator c_compRef = cRef.getComparator();
 
-		IntegerExpression c_leftRef = (IntegerExpression)cRef.getLeft();
-		IntegerExpression c_rightRef = (IntegerExpression)cRef.getRight();
+		final IntegerExpression c_leftRef = (IntegerExpression)cRef.getLeft();
+		final IntegerExpression c_rightRef = (IntegerExpression)cRef.getRight();
 
 		switch(c_compRef){
 		case EQ:
@@ -753,12 +778,12 @@ public class PCParser {
 		return true;
 	}
 
-	static public boolean createDPNonLinearIntegerConstraint(NonLinearIntegerConstraint cRef) {
+	static public boolean createDPNonLinearIntegerConstraint(final NonLinearIntegerConstraint cRef) {
 
-		Comparator c_compRef = cRef.getComparator();
+		final Comparator c_compRef = cRef.getComparator();
 
-		IntegerExpression c_leftRef = (IntegerExpression)cRef.getLeft();
-		IntegerExpression c_rightRef = (IntegerExpression)cRef.getRight();
+		final IntegerExpression c_leftRef = (IntegerExpression)cRef.getLeft();
+		final IntegerExpression c_rightRef = (IntegerExpression)cRef.getRight();
 
 		switch(c_compRef){
 		case EQ:
@@ -863,7 +888,7 @@ public class PCParser {
 	//static Map<String,Boolean> dpMap = new HashMap<String,Boolean>();
 
 	// result is in pb
-	public static ProblemGeneral parse(PathCondition pc, ProblemGeneral pbtosolve) {
+	public static ProblemGeneral parse(final PathCondition pc, final ProblemGeneral pbtosolve) {
 		pb=pbtosolve;
 		
 		
@@ -893,8 +918,8 @@ public class PCParser {
 
 			}
 			else {
-				System.out.println("## Warning: Non Linear Integer Constraint (only coral can handle it)" + cRef);
-				if(pb instanceof ProblemCoral)
+				//System.out.println("## Warning: Non Linear Integer Constraint (only coral can handle it)" + cRef);
+				if(pb instanceof ProblemCoral || pb instanceof ProblemZ3)
 					constraintResult= createDPNonLinearIntegerConstraint((NonLinearIntegerConstraint)cRef);
 				else
 					throw new RuntimeException("## Error: Non Linear Integer Constraint not handled " + cRef);

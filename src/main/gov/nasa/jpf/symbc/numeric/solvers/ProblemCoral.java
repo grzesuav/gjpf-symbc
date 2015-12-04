@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2014, United States Government, as represented by the
+ * Administrator of the National Aeronautics and Space Administration.
+ * All rights reserved.
+ *
+ * Symbolic Pathfinder (jpf-symbc) is licensed under the Apache License, 
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ * 
+ *        http://www.apache.org/licenses/LICENSE-2.0. 
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and 
+ * limitations under the License.
+ */
+
 //
 //Copyright (C) 2005 United States Government as represented by the
 //Administrator of the National Aeronautics and Space Administration
@@ -22,6 +40,7 @@ package gov.nasa.jpf.symbc.numeric.solvers;
 import symlib.SymBool;
 import symlib.SymDouble;
 import symlib.SymInt;
+import symlib.SymIntLiteral;
 import symlib.SymLiteral;
 import symlib.SymNumber;
 import symlib.Util;
@@ -145,7 +164,11 @@ public class ProblemCoral extends ProblemGeneral {
 
 	@Override
 	public Object makeIntVar(String name, int min, int max) {
-		return Util.createSymLiteral(0/*default value*/);
+		
+		SymIntLiteral result = Util.createSymLiteral(0/*default value*/);
+		pc.addConstraint(Util.le(result, Util.createConstant(max)));
+		pc.addConstraint(Util.ge(result, Util.createConstant(min)));
+		return result;
 	}
 
 	@Override
@@ -407,10 +430,20 @@ public class ProblemCoral extends ProblemGeneral {
 	}
 
 	@Override
+	public Object rem(int value, Object exp) {
+		return Util.mod(Util.createConstant(value), (SymInt)exp);
+	}
+	
+	@Override
 	public Object mult(Object exp, int value) {
 		return Util.mul((SymInt)exp, Util.createConstant(value));
 	}
-
+	
+	@Override
+	public Object rem(Object exp, int value) {
+		return Util.mod((SymInt)exp, Util.createConstant(value));
+	}
+	
 	@Override
 	public Object mult(Object exp1, Object exp2) {
 		if (exp1 instanceof SymDouble) {
@@ -422,6 +455,16 @@ public class ProblemCoral extends ProblemGeneral {
 		}
 	}
 
+	@Override
+	public Object rem(Object exp1, Object exp2) {
+		if (exp1 instanceof SymInt) {
+			return Util.mod((SymInt)exp1, (SymInt)exp2);
+		} else {
+			throw new UnsupportedOperationException();
+		}
+	}
+	
+	
 	@Override
 	public Object mult(double value, Object exp) {
 		return Util.mul(Util.createConstant(value), (SymDouble)exp);
